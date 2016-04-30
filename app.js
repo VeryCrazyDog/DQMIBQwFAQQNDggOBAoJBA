@@ -1,9 +1,16 @@
+'use strict';
+
+// Include modules
+var fivebeans = require('fivebeans');
+var Promise = require("bluebird");
+
+
 // Include config
 var config = {
 	tubeName: 'test'
 };
 
-var Beanworker = require('fivebeans').worker;
+var Beanworker = fivebeans.worker;
 var worker = new Beanworker({
 	id: 'cxr_worker',
 	host: 'localhost',

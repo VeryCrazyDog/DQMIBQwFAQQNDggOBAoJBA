@@ -1,3 +1,5 @@
+'use strict';
+
 module.exports = function() {
 	function CXRHandler() {
 		this.type = 'cxr';
@@ -5,7 +7,7 @@ module.exports = function() {
 
 	CXRHandler.prototype.work = function(payload, callback) {
 		console.log('work');
-		console.log('payload');
+		console.log(payload);
 		callback('success');
 	}
 

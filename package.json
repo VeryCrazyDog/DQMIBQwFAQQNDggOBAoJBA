@@ -9,6 +9,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "fivebeans": "^1.4.0"
+    "bluebird": "^3.3.5",
+    "co": "^4.6.0",
+    "fivebeans": "^1.4.0",
+    "mongodb": "^2.1.18"
   }
 }

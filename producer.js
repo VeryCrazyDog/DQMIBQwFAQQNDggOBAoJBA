@@ -1,30 +1,40 @@
 'use strict';
 
 // Include modules
+var Promise = require("bluebird");
+var co = require('co');
 var fivebeans = require('fivebeans');
 
 // Include config
 var config = {
     host: 'localhost',
     port: 11300,
-    tubeName: 'test'
+    tubeName: 'test',
+    totalCount: 5
 };
 
 // Main
 var client = new fivebeans.client(config.host, config.port);
 client.on('connect', function () {
     client.use(config.tubeName, function (err, tubename) {
-        var payload, i;
+        var payload, i, count;
         payload = JSON.stringify({
             type: 'cxr',
-            payload: 'testing123'
+            payload: {
+                "from": "HKD",
+                "to": "USD"
+            }
         });
-        for (i = 0; i < 5; i++) {
-            client.put(0, 0, 1000, payload, function (err, jobid) {
+        for (i = 0, count = 0; i < config.totalCount; i++) {
+            client.put(0, 0, 1000, payload, function (err, jobId) {
                 if (err) {
                     console.log(err);
                 } else {
-                    console.log('success, job ID: ' + jobid);
+                    console.log('success, job ID: ' + jobId);
+                }
+                count++;
+                if (count >= config.totalCount) {
+                    process.exit();
                 }
             });
         }
