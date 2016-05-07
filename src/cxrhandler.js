@@ -32,39 +32,57 @@ const getContent = function (url) {
 };
 
 // Prototype implementation
-const CXRHandler = function (workerId, config) {
+const CXRHandler = function (workerId, config, db) {
+	this.type = 'cxr';
 	this.id = workerId;
 	this.config = config;
-	this.type = 'cxr';
-}
-
+	this.db = db;
+};
 
 CXRHandler.prototype.work = function (payload, callback) {
 	const that = this;
-	var base, to, url;
-	if (typeof payload.from == 'string' && typeof payload.to == 'string') {
-		base = payload.from.toUpperCase();
-		to = payload.to.toUpperCase();
-		url = 'http://api.fixer.io/latest?base=' + base + '&symbols=' + to;
-		console.info('[Worker.%d] Querying %s', this.id, url);
+	if (this.checkPayload(payload)) {
 		co(function* () {
-			var content;
+			var url, content, insertResult;
+			url = 'http://api.fixer.io/latest?base=' + payload.from + '&symbols=' + payload.to;
+			console.info('[Worker.%d] Querying %s', that.id, url);
 			content = yield getContent(url).then(JSON.parse);
 			// TODO Validation on the returned data
 			content = {
-				from: base,
-				to: to,
+				from: content.base,
+				to: payload.to,
 				created_at: new Date(),
-				rate: content.rates[to].toFixed(2).toString()
+				rate: content.rates[payload.to].toFixed(2).toString()
 			};
-			console.log(content);
-			callback('success');
+			console.info('[Worker.%d] Inserting data', that.id, content);
+			insertResult = yield that.db.collection('xr').insertOne(content);
+			if (insertResult.result.ok) {
+				callback('success');
+			} else {
+				callback('bury');
+			}
 		}).catch(function (err) {
 			console.error('[Worker.%d] %s', that.id, err);
+			callback('bury');
 		});
 	} else {
+		// Invalid payload, bury the job
 		callback('bury');
 	}
+};
+
+CXRHandler.prototype.checkPayload = function (payload) {
+	var result, type;
+	result = (typeof payload.from == 'string' && typeof payload.to == 'string');
+	if (result) {
+		payload.from = payload.from.toUpperCase();
+		payload.to = payload.to.toUpperCase();
+		type = typeof payload.successCount;
+		result = (result && (type == 'number' || type == 'undefined'));
+		type = typeof payload.failCount;
+		result = (result && (type == 'number' || type == 'undefined'));
+	}
+	return result;
 }
 
 module.exports = CXRHandler;

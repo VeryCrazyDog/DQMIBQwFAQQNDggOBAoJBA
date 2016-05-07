@@ -28,7 +28,7 @@ BsWorker.prototype.start = function () {
 			host: that.config.bs.host,
 			port: that.config.bs.port,
 			handlers: {
-				cxr: new CXRHandler(that.id, that.config)
+				cxr: new CXRHandler(that.id, that.config, db)
 			},
 		});
 		worker.on('started', function () {
