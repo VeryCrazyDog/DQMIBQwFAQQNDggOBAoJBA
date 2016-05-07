@@ -1,38 +1,67 @@
 'use strict';
 
-// Include modules
-var fivebeans = require('fivebeans');
-var Promise = require("bluebird");
+// Include node.js offical modules
+const os = require('os');
+const cluster = require('cluster');
 
+// Include third party modules
+const Promise = require("bluebird");
+const fivebeans = require('fivebeans');
 
-// Include config
-var config = {
-	tubeName: 'test'
-};
+// Setup classes
+const Beanworker = fivebeans.worker;
 
-var Beanworker = fivebeans.worker;
-var worker = new Beanworker({
-	id: 'cxr_worker',
-	host: 'localhost',
-	port: 11300,
-	handlers: {
-		cxr: require('./cxrhandler.js')()
-	},
-});
-worker.on('started', function () {
-	console.log('Worker started');
-}).on('stopped', function () {
-	console.log('Worker stopped');
-}).on('error', function (err) {
-	console.log(err);
-}).on('warning', function (err) {
-	console.log('ERROR: ' + err.message);
-}).on('job.reserved', function (id) {
-	console.log('Job ' + id + ' reserved');
-}).on('job.handled', function (job) {
-	console.log('Job ' + job.id + ' handled');
-}).on('job.deleted', function (id) {
-	console.log('Job ' + id + ' deleted');
-}).on('job.buried', function (id) {
-	console.log('Job ' + id + ' buried');
-}).start([config.tubeName]);
+// Setup constants
+const cpuCount = os.cpus().length;
+
+// Load configuration
+const config = require('./config/default.js');
+try {
+    require('./config/' + os.hostname().toLowerCase() + '.js')(config);
+} catch (e) {
+}
+
+// Define main
+const main = function () {
+	var i, worker;
+	if (cluster.isMaster) {
+		console.info('[Master] Master process created');
+		for (i = 0; i < cpuCount; i++) {
+			cluster.fork();
+		}
+		cluster.on('exit', function (worker, code, signal) {
+			console.info('[Master] Cluster worker ' + worker.process.pid + ' died');
+			cluster.fork();
+		});
+	} else {
+		console.info('[Worker.' + cluster.worker.id + '] Cluster worker created');
+		worker = new Beanworker({
+			id: 'cxr_worker',
+			host: config.bs.host,
+			port: config.bs.port,
+			handlers: {
+				cxr: require('./cxrhandler.js')()
+			},
+		});
+		worker.on('started', function () {
+			console.info('[Worker.' + cluster.worker.id + '] Beanworker started');
+		}).on('stopped', function () {
+			console.info('[Worker.' + cluster.worker.id + '] Beanworker stopped');
+		}).on('error', function (err) {
+			console.error(err);
+		}).on('warning', function (err) {
+			console.warn('ERROR: ' + err.message);
+		}).on('job.reserved', function (id) {
+			console.info('Job ' + id + ' reserved');
+		}).on('job.handled', function (job) {
+			console.info('Job ' + job.id + ' handled');
+		}).on('job.deleted', function (id) {
+			console.info('Job ' + id + ' deleted');
+		}).on('job.buried', function (id) {
+			console.info('Job ' + id + ' buried');
+		}).start([config.bs.tubeName]);
+	}
+}
+
+// Call main
+main();
