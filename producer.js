@@ -18,7 +18,7 @@ try {
     require('./config/' + os.hostname().toLowerCase() + '.js')(config);
 } catch (e) {
 }
-config.bs.totalCount = 5;
+config.bs.totalCount = 1;
 
 // Main
 var client = new fivebeans.client(config.bs.host, config.bs.port);

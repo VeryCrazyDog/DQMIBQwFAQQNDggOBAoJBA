@@ -33,8 +33,8 @@ const main = function () {
 		});
 	} else {
 		console.info('[Worker.%d] Cluster worker created', cluster.worker.id);
-		worker = new BsWorker(cluster.worker.id);
-		worker.start(config);
+		worker = new BsWorker(cluster.worker.id, config);
+		worker.start();
 	}
 }
 

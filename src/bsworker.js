@@ -12,22 +12,23 @@ const Beanworker = require('fivebeans').worker;
 const CXRHandler = require('./cxrhandler.js');
 
 // Prototype implementation
-const BsWorker = function (id) {
+const BsWorker = function (id, config) {
 	this.id = id;
+	this.config = config;
 };
 
-BsWorker.prototype.start = function (config) {
+BsWorker.prototype.start = function () {
 	var that = this;
 	co(function* () {
 		var db, worker;
-		db = yield MongoClient.connect(config.db.uri);
+		db = yield MongoClient.connect(that.config.db.uri);
 		console.info('[Worker.%d] Connected to database', that.id);
 		worker = new Beanworker({
 			id: 'cxr_worker',
-			host: config.bs.host,
-			port: config.bs.port,
+			host: that.config.bs.host,
+			port: that.config.bs.port,
 			handlers: {
-				cxr: new CXRHandler()
+				cxr: new CXRHandler(that.id, that.config)
 			},
 		});
 		worker.on('started', function () {
@@ -46,7 +47,7 @@ BsWorker.prototype.start = function (config) {
 			console.info('[Worker.%d] Job %s deleted', that.id, id);
 		}).on('job.buried', function (id) {
 			console.info('[Worker.%d] Job %s buried', that.id, id);
-		}).start([config.bs.tubeName]);
+		}).start([that.config.bs.tubeName]);
 	}).catch(function (err) {
 		console.error('[Worker.%d] %s', that.id, err);
 		process.exit(1);
