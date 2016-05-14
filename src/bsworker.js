@@ -1,5 +1,9 @@
 'use strict';
 
+// Include node.js offical modules
+const http = require('http');
+const https = require('https');
+
 // Include third party modules
 const Promise = require("bluebird");
 const co = require('co');
@@ -24,20 +28,26 @@ BsWorker.prototype.start = function () {
 	});
 	// TODO Better handling process exit condition and connection close
 	co(function* () {
-		yield [MongoClient.connect(self.config.db.uri).then(function (db) {
+		yield [MongoClient.connect(self.config.db.uri).then((db) => {
 			self.db = db;
 			console.info('[Worker.%d] Connected to mongodb', self.id);
 		}), co(function* () {
 			var tubelist;
 			yield self.bs.connectAsync();
 			console.info('[Worker.%d] Connected to beanstalk at %s:%d', self.id, self.config.bs.host, self.config.bs.port);
-			yield [self.bs.watchAsync([self.config.bs.tubeName]), self.bs.ignoreAsync(['default'])];
+			yield [
+				self.bs.watchAsync([self.config.bs.tubeName]),
+				self.bs.ignoreAsync(['default']),
+				self.bs.useAsync(self.config.bs.tubeName).then((tubeName) => {
+					console.info('[Worker.%d] Using beanstalk tube for produce job: %s', self.id, tubeName);
+				})
+			];
 			tubelist = yield self.bs.list_tubes_watchedAsync();
-			console.info('[Worker.%d] Watching beanstalk tube: %s', self.id, tubelist.join(', '));
+			console.info('[Worker.%d] Watching beanstalk tube for consume job: %s', self.id, tubelist.join(', '));
 		})];
 		return doNextJob.call(self);
 	}).catch(function (err) {
-		console.error('[Worker.%d] Internal error: %s', self.id, err);
+		console.error('[Worker.%d] Internal error: %s', self.id, err.stack);
 		process.exit(1);
 	});
 };
@@ -75,12 +85,128 @@ const promisifyBs = function (client) {
 const doNextJob = function () {
 	var self = this;
 	return co(function* () {
-		var job;
+		var job, jobId, payload, response, newJobId;
 		job = yield self.bs.reserveAsync();
-		console.info('[Worker.%d] Job %s reserved', self.id, job[0]);
-		yield self.bs.destroyAsync(job[0]);
-		console.info('[Worker.%d] Job %s destroyed', self.id, job[0]);
+		jobId = job[0];
+		console.info('[Worker.%d] Job %s reserved', self.id, jobId);
+		payload = parsePayload.call(self, job);
+		if (payload !== null) {
+			response = null;
+			try {
+				response = yield getCxr.call(self, payload);
+			} catch (err) {
+				response = null;
+				console.info('[Worker.%d] Failed to obtain currency exchange rate: %s', self.id, err);
+			}
+			if (response !== null) {
+				yield self.bs.destroyAsync(jobId);
+				console.info('[Worker.%d] Job %s destroyed', self.id, jobId);
+			} else {
+				payload.failCount = payload.failCount + 1;
+				if (payload.failCount < 3) {
+					// Make sure the new failed job is put into the queue before destory current job
+					newJobId = yield self.bs.putAsync(1000, 3, 60, JSON.stringify(payload));
+					console.info('[Worker.%d] New failure job %s put', self.id, newJobId);
+					yield self.bs.destroyAsync(jobId);
+					console.info('[Worker.%d] Job %s destroyed', self.id, jobId);
+				} else {
+					console.warn('[Worker.%d] Maximum fail count reached, burying job %s', self.id, jobId);
+					buryJob.call(self, jobId);
+				}
+			}
+		} else {
+			buryJob.call(self, jobId);
+		}
 		return doNextJob.call(self);
+	});
+};
+
+const parsePayload = function (job) {
+	var result, type;
+	result = null;
+	try {
+		result = JSON.parse(job[1].toString('ascii'));
+		if (typeof result.from == 'string') {
+			result.from = result.from.toUpperCase();
+		} else {
+			throw new Error("Invalid field 'from'");
+		}
+		if (typeof result.to == 'string') {
+			result.to = result.to.toUpperCase();
+		} else {
+			throw new Error("Invalid field 'to'");
+		}
+		type = typeof result.successCount;
+		if (type == 'undefined') {
+			result.successCount = 0;
+		} else if (type != 'number') {
+			throw new Error("Invalid field 'successCount'");
+		}
+		type = typeof result.failCount;
+		if (type == 'undefined') {
+			result.failCount = 0;
+		} else if (type != 'number') {
+			throw new Error("Invalid field 'failCount'");
+		}
+	} catch (err) {
+		console.warn('[Worker.%d] Invalid payload for job %s: %s', this.id, job[0], err);
+	}
+	return result;
+};
+
+const getContent = function (url) {
+	// return new pending promise
+	return new Promise((resolve, reject) => {
+		// select http or https module, depending on reqested url
+		const lib = url.startsWith('https') ? https : http;
+		const request = lib.get(url, (response) => {
+			// handle http errors
+			if (response.statusCode < 200 || response.statusCode > 299) {
+				reject(new Error('Failed to load page, status code: ' + response.statusCode));
+			}
+			// temporary data holder
+			const body = [];
+			// on every content chunk, push it to the data array
+			response.on('data', (chunk) => body.push(chunk));
+			// we are done, resolve promise with those joined chunks
+			response.on('end', () => resolve(body.join('')));
+		});
+		// handle connection errors of the request
+		request.on('error', (err) => reject(err))
+	})
+};
+
+const getCxr = function (payload) {
+	var self = this;
+	return co(function* () {
+		var url, content, insertResult;
+		url = 'http://api.fixer.io/latest?base=' + payload.from + '&symbols=' + payload.to;
+		console.info('[Worker.%d] Querying %s', self.id, url);
+		content = yield getContent(url).then(JSON.parse);
+		// TODO Validation on the returned data
+		content = {
+			from: content.base,
+			to: payload.to,
+			created_at: new Date(),
+			rate: content.rates[payload.to].toFixed(2).toString()
+		};
+		return content;
+		// console.info('[Worker.%d] Inserting data', that.id, content);
+		// insertResult = yield that.db.collection('xr').insertOne(content);
+		// if (insertResult.result.ok) {
+		// 	callback('success');
+		// } else {
+		// 	callback('bury');
+		// }
+	});
+};
+
+const buryJob = function (jobId) {
+	var self = this;
+	self.bs.buryAsync(jobId, 1000).then(function () {
+		console.info('[Worker.%d] Job %s buried', self.id, jobId);
+	}, function (err) {
+		console.info('[Worker.%d] Failed to bury job %s: ', self.id, jobId, err);
 	});
 };
 

@@ -35,7 +35,7 @@ const main = function () {
 			// Sleep for 1 second to prevent looping
 			setTimeout(function () {
 				cluster.fork();
-			}, 1000);
+			}, 5000);
 		});
 	} else {
 		console.info('[Worker.%d] Cluster worker created', cluster.worker.id);

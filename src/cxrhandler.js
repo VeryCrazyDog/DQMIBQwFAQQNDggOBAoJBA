@@ -8,29 +8,6 @@ const https = require('https');
 const Promise = require("bluebird");
 const co = require('co');
 
-// Helper functions
-const getContent = function (url) {
-	// return new pending promise
-	return new Promise((resolve, reject) => {
-		// select http or https module, depending on reqested url
-		const lib = url.startsWith('https') ? https : http;
-		const request = lib.get(url, (response) => {
-			// handle http errors
-			if (response.statusCode < 200 || response.statusCode > 299) {
-				reject(new Error('Failed to load page, status code: ' + response.statusCode));
-			}
-			// temporary data holder
-			const body = [];
-			// on every content chunk, push it to the data array
-			response.on('data', (chunk) => body.push(chunk));
-			// we are done, resolve promise with those joined chunks
-			response.on('end', () => resolve(body.join('')));
-		});
-		// handle connection errors of the request
-		request.on('error', (err) => reject(err))
-    })
-};
-
 // Prototype implementation
 const CXRHandler = function (workerId, config, db) {
 	this.type = 'cxr';
@@ -70,19 +47,5 @@ CXRHandler.prototype.work = function (payload, callback) {
 		callback('bury');
 	}
 };
-
-CXRHandler.prototype.checkPayload = function (payload) {
-	var result, type;
-	result = (typeof payload.from == 'string' && typeof payload.to == 'string');
-	if (result) {
-		payload.from = payload.from.toUpperCase();
-		payload.to = payload.to.toUpperCase();
-		type = typeof payload.successCount;
-		result = (result && (type == 'number' || type == 'undefined'));
-		type = typeof payload.failCount;
-		result = (result && (type == 'number' || type == 'undefined'));
-	}
-	return result;
-}
 
 module.exports = CXRHandler;

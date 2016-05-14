@@ -26,14 +26,11 @@ client.on('connect', function () {
     client.use(config.bs.tubeName, function (err, tubename) {
         var payload, i, count;
         payload = JSON.stringify({
-            type: 'cxr',
-            payload: {
-                "from": "HKD",
-                "to": "USD"
-            }
+            "from": "HKD",
+            "to": "USD"
         });
         for (i = 0, count = 0; i < config.bs.totalCount; i++) {
-            client.put(0, 0, 1000, payload, function (err, jobId) {
+            client.put(0, 0, 60, payload, function (err, jobId) {
                 if (err) {
                     console.log(err);
                 } else {
