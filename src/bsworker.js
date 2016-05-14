@@ -36,14 +36,18 @@ BsWorker.prototype.start = function () {
 			yield self.bs.connectAsync();
 			console.info('[Worker.%d] Connected to beanstalk at %s:%d', self.id, self.config.bs.host, self.config.bs.port);
 			yield [
-				self.bs.watchAsync([self.config.bs.tubeName]),
-				self.bs.ignoreAsync(['default']),
+				Promise.all([
+					self.bs.watchAsync([self.config.bs.tubeName]),
+					self.bs.ignoreAsync(['default'])
+				]).then(() => {
+					return self.bs.list_tubes_watchedAsync();
+				}).then((tubelist) => {
+					console.info('[Worker.%d] Watching beanstalk tube for consume job: %s', self.id, tubelist.join(', '));
+				}),
 				self.bs.useAsync(self.config.bs.tubeName).then((tubeName) => {
 					console.info('[Worker.%d] Using beanstalk tube for produce job: %s', self.id, tubeName);
 				})
 			];
-			tubelist = yield self.bs.list_tubes_watchedAsync();
-			console.info('[Worker.%d] Watching beanstalk tube for consume job: %s', self.id, tubelist.join(', '));
 		})];
 		return doNextJob.call(self);
 	}).catch(function (err) {
@@ -85,32 +89,44 @@ const promisifyBs = function (client) {
 const doNextJob = function () {
 	var self = this;
 	return co(function* () {
-		var job, jobId, payload, response, newJobId;
+		var job, jobId, payload, success, newJobId;
+		console.info('[Worker.%d] Waiting for new job to reserve', self.id);
 		job = yield self.bs.reserveAsync();
 		jobId = job[0];
 		console.info('[Worker.%d] Job %s reserved', self.id, jobId);
 		payload = parsePayload.call(self, job);
 		if (payload !== null) {
-			response = null;
+			console.info('[Worker.%d] Current payload is: %s', self.id, job[1]);
+			success = true;
 			try {
-				response = yield getCxr.call(self, payload);
+				yield processJob.call(self, payload);
 			} catch (err) {
-				response = null;
+				success = false;
 				console.info('[Worker.%d] Failed to obtain currency exchange rate: %s', self.id, err);
 			}
-			if (response !== null) {
+			if (success) {
+				payload.successCount = payload.successCount + 1;
+				if (payload.successCount < self.config.jobDoneCount) {
+					console.info('[Worker.%d] Job success, putting new job with delay %d seconds', self.id, self.config.successInterval);
+					// Make sure the new failed job is put into the queue before destory current job
+					newJobId = yield self.bs.putAsync(1000, self.config.successInterval, 60, JSON.stringify(payload));
+					console.info('[Worker.%d] New job %s put', self.id, newJobId);
+				} else {
+					console.info('[Worker.%d] Job done after %d times of success', self.id, payload.successCount);
+				}
+				console.info('[Worker.%d] Destorying job %s', self.id, jobId);
 				yield self.bs.destroyAsync(jobId);
-				console.info('[Worker.%d] Job %s destroyed', self.id, jobId);
 			} else {
 				payload.failCount = payload.failCount + 1;
-				if (payload.failCount < 3) {
+				if (payload.failCount < self.config.jobGaveUpCount) {
+					console.warn('[Worker.%d] Job failed, putting new job with delay %d seconds', self.id, self.config.failureInterval);
 					// Make sure the new failed job is put into the queue before destory current job
-					newJobId = yield self.bs.putAsync(1000, 3, 60, JSON.stringify(payload));
-					console.info('[Worker.%d] New failure job %s put', self.id, newJobId);
+					newJobId = yield self.bs.putAsync(1000, self.config.failureInterval, 60, JSON.stringify(payload));
+					console.info('[Worker.%d] New job %s put', self.id, newJobId);
+					console.info('[Worker.%d] Destorying job %s', self.id, jobId);
 					yield self.bs.destroyAsync(jobId);
-					console.info('[Worker.%d] Job %s destroyed', self.id, jobId);
 				} else {
-					console.warn('[Worker.%d] Maximum fail count reached, burying job %s', self.id, jobId);
+					console.warn('[Worker.%d] Job gave up after %times of failure, burying job %s', self.id, payload.failCount, jobId);
 					buryJob.call(self, jobId);
 				}
 			}
@@ -176,28 +192,22 @@ const getContent = function (url) {
 	})
 };
 
-const getCxr = function (payload) {
+const processJob = function (payload) {
 	var self = this;
 	return co(function* () {
 		var url, content, insertResult;
 		url = 'http://api.fixer.io/latest?base=' + payload.from + '&symbols=' + payload.to;
 		console.info('[Worker.%d] Querying %s', self.id, url);
 		content = yield getContent(url).then(JSON.parse);
-		// TODO Validation on the returned data
+		// TODO Validate the returned data
 		content = {
 			from: content.base,
 			to: payload.to,
 			created_at: new Date(),
 			rate: content.rates[payload.to].toFixed(2).toString()
 		};
-		return content;
-		// console.info('[Worker.%d] Inserting data', that.id, content);
-		// insertResult = yield that.db.collection('xr').insertOne(content);
-		// if (insertResult.result.ok) {
-		// 	callback('success');
-		// } else {
-		// 	callback('bury');
-		// }
+		console.info('[Worker.%d] Inserting data to database', self.id, content);
+		yield self.db.collection('xr').insertOne(content);
 	});
 };
 
