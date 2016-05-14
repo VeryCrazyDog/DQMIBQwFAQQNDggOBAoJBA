@@ -13,23 +13,26 @@ const CPU_COUNT = os.cpus().length;
 /**
  * Main function
  */
-var main = function () {
-	var config, i, workerCount, worker;
+let main = function () {
+	let config;
 	// Load configuration
 	config = require('./config/default.js');
 	// Load host-based configuration
 	try {
 		require('./config/' + os.hostname().toLowerCase() + '.js')(config);
 	} catch (e) {
+		// Intended noop to suppress error when no host-based configuration is specified
+		Function.prototype;
 	}
 	if (cluster.isMaster) {
+		let workerCount;
 		console.info('[Master] Master process created');
 		if (config.workerCount > 0) {
 			workerCount = config.workerCount;
 		} else {
 			workerCount = CPU_COUNT;
 		}
-		for (i = 0; i < workerCount; i++) {
+		for (let i = 0; i < workerCount; i++) {
 			cluster.fork();
 		}
 		cluster.on('exit', function (worker, code, signal) {
@@ -40,11 +43,12 @@ var main = function () {
 			}, 5000);
 		});
 	} else {
+		let worker;
 		console.info('[Worker.%d] Cluster worker created', cluster.worker.id);
 		worker = new BsWorker(cluster.worker.id, config);
 		worker.start();
 	}
-}
+};
 
 // Call main
 main();
