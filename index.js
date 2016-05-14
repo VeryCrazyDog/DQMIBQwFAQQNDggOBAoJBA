@@ -19,10 +19,15 @@ try {
 
 // Define main
 const main = function () {
-	var i, worker;
+	var i, workerCount, worker;
 	if (cluster.isMaster) {
 		console.info('[Master] Master process created');
-		for (i = 0; i < cpuCount; i++) {
+		if (config.workerCount > 0) {
+			workerCount = config.workerCount;
+		} else {
+			workerCount = cpuCount;
+		}
+		for (i = 0; i < workerCount; i++) {
 			cluster.fork();
 		}
 		cluster.on('exit', function (worker, code, signal) {

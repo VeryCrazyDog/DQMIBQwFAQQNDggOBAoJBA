@@ -19,34 +19,49 @@ const BsWorker = function (id, config) {
 BsWorker.prototype.start = function () {
 	var self = this;
 	this.bs = promisifyBs(new fivebeans.client(this.config.bs.host, this.config.bs.port));
-	self.bs.on('connect', function () {
-		console.info('[Worker.%d] Connected to beanstalk at %s:%d', self.id, self.config.bs.host, self.config.bs.port);
-		co(function* () {
-			//self.db = yield MongoClient.connect(self.config.db.uri);
-			//console.info('[Worker.%d] Connected to mongodb', self.id);
+	this.bs.on('close', function () {
+		console.info('[Worker.%d] Connection to beanstalk has closed', self.id);
+	});
+	// TODO Better handling process exit condition and connection close
+	co(function* () {
+		yield [MongoClient.connect(self.config.db.uri).then(function (db) {
+			self.db = db;
+			console.info('[Worker.%d] Connected to mongodb', self.id);
+		}), co(function* () {
+			var tubelist;
+			yield self.bs.connectAsync();
+			console.info('[Worker.%d] Connected to beanstalk at %s:%d', self.id, self.config.bs.host, self.config.bs.port);
 			yield [self.bs.watchAsync([self.config.bs.tubeName]), self.bs.ignoreAsync(['default'])];
-			doNextJob.call(self);
-		}).catch(function (err) {
-			console.error('[Worker.%d] Internal error: %s', self.id, err);
-			if (self.db !== null) {
-				db.close();
-			}
-			process.exit(1);
-		});
-	}).on('error', function (err) {
-		console.error('[Worker.%d] Failed to connect to beanstalk at %s:%d', self.id, self.config.bs.host, self.config.bs.port);
-		if (self.db !== null) {
-			db.close();
-		}
+			tubelist = yield self.bs.list_tubes_watchedAsync();
+			console.info('[Worker.%d] Watching beanstalk tube: %s', self.id, tubelist.join(', '));
+		})];
+		return doNextJob.call(self);
+	}).catch(function (err) {
+		console.error('[Worker.%d] Internal error: %s', self.id, err);
 		process.exit(1);
-	}).on('close', function () {
-		if (self.db !== null) {
-			db.close();
-		}
-	}).connect();
+	});
 };
 
 const promisifyBs = function (client) {
+	Promise.promisifyAll(client, {
+		filter: function (name) {
+			return name === 'connect';
+		},
+		promisifier: function (originalFunction, defaultPromisifier) {
+			return function promisified() {
+				var args = [].slice.call(arguments);
+				var self = this;
+				return new Promise(function (resolve, reject) {
+					self.on('connect', function () {
+						resolve();
+					}).on('error', function (err) {
+						reject(err);
+					});
+					originalFunction.apply(self, args);
+				});
+			};
+		}
+	});
 	Promise.promisifyAll(client, {
 		filter: function (name) {
 			return name === 'reserve';
@@ -59,58 +74,19 @@ const promisifyBs = function (client) {
 
 const doNextJob = function () {
 	var self = this;
-	co(function* () {
+	return co(function* () {
 		var job;
 		job = yield self.bs.reserveAsync();
 		console.info('[Worker.%d] Job %s reserved', self.id, job[0]);
 		yield self.bs.destroyAsync(job[0]);
 		console.info('[Worker.%d] Job %s destroyed', self.id, job[0]);
-		//doNext.call(self);
-	}).catch(function (err) {
-		console.error('[Worker.%d] Internal error: %s', self.id, err);
-		if (self.db !== null) {
-			db.close();
-		}
-		process.exit(1);
+		return doNextJob.call(self);
 	});
 };
 
 module.exports = BsWorker;
 
 
-
-/*
-
-BsWorker.prototype.reserve = function () {
-	var self = this;
-	return new Promise((resolve, reject) => {
-		self.bs.reserve(function (err, jobid, payload) {
-			if (err) {
-				reject(err);
-			} else {
-				console.info('[Worker.%d] Job %s reserved', self.id, jobid);
-				resolve({
-					id: jobid,
-					payload: payload.toString('ascii')
-				});
-			}
-		});
-	});
-};
-
-BsWorker.prototype.destroy = function (jobId) {
-	var self = this;
-	return new Promise((resolve, reject) => {
-		self.bs.destroy(jobid, function (err) {
-			if (err) {
-				resolve();
-			} else {
-				reject(err);
-			}
-		});
-	});
-};
-*/
 
 
 /*

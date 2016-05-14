@@ -1,6 +1,7 @@
 'use strict';
 
 module.exports = {
+	workerCount: 0,
 	bs: {
 		host: 'localhost',
 		port: 11300,
