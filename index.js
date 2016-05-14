@@ -27,6 +27,7 @@ const main = function () {
 		}
 		cluster.on('exit', function (worker, code, signal) {
 			console.info('[Master] Cluster worker %d died', worker.process.pid);
+			// Sleep for 1 second to prevent looping
 			setTimeout(function () {
 				cluster.fork();
 			}, 1000);

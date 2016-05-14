@@ -7,11 +7,6 @@ const fivebeans = require('fivebeans');
 
 // Setup third party classes
 const MongoClient = require('mongodb').MongoClient;
-//const Beanworker = require('fivebeans').worker;
-
-// Setup our classes
-//const CXRHandler = require('./cxrhandler.js');
-const BsClient = require('./bsclient.js');
 
 // Prototype implementation
 const BsWorker = function (id, config) {
@@ -22,139 +17,69 @@ const BsWorker = function (id, config) {
 };
 
 BsWorker.prototype.start = function () {
-	this.bs = new BsClient(this.config.bs.host, this.config.bs.port);
-	MongoClient.connect(this.config.db.uri).then((db) => {
-		console.info('[Worker.%d] Connected to mongodb', this.id);
-		this.db = db;
-	}).then(() => {
-		return this.bs.connect();
-	}).then(() => {
-		console.info('[Worker.%d] Connected to beanstalk at %s:%d', this.id, this.config.bs.host, this.config.bs.port);
-		return Promise.all([this.bs.watch([this.config.bs.tubeName]), this.bs.ignore(['default'])]);
-	}).then(() => {
-		this.doNext();
-	}).catch(function (err) {
-		console.error('[Worker.%d] Internal error: %s', this.id, err);
-		process.exit(1);
-	});
-
-	/*
-	
-	
 	var self = this;
-	self.db = yield MongoClient.connect(self.config.db.uri);
-	
-	
-	
-	co(function* () {
-
-		self.bs = new BsClient(self.config.bs.host, self.config.bs.port);
-		yield self.bs.connect();
+	this.bs = promisifyBs(new fivebeans.client(this.config.bs.host, this.config.bs.port));
+	self.bs.on('connect', function () {
 		console.info('[Worker.%d] Connected to beanstalk at %s:%d', self.id, self.config.bs.host, self.config.bs.port);
-		yield [self.bs.watch([self.config.bs.tubeName]), self.bs.ignore(['default'])];
-		self.doNext();
-	}).catch(function (err) {
-		console.error('[Worker.%d] Internal error: %s', self.id, err);
-		process.exit(1);
-	});
-	*/
-
-	/*
-	co(function* () {
-		self.db = yield MongoClient.connect(self.config.db.uri);
-		console.info('[Worker.%d] Connected to mongodb', self.id);
-		self.bs = new fivebeans.client(self.config.bs.host, self.config.bs.port);
-		self.bs.on('connect', function () {
-			console.info('[Worker.%d] Connected to beanstalk at %s:%d', self.id, self.config.bs.host, self.config.bs.port);
-			self.bs.watch([self.config.bs.tubeName], function (err, numWatched) {
-				
-				
-				
-				self.bs.ignore(['default'], function () {
-					self.bs
-					self.doNext();
-				});
-			});
-		}).on('error', function (err) {
-			console.error('[Worker.%d] Failed to connect to beanstalk: %s', self.id, err);
-			db.close();
-			process.exit(1);
-		}).on('close', function () {
-			db.close();
-			process.exit(1);
-		}).connect();
-	}).catch(function (err) {
-		console.error('[Worker.%d] Internal error: %s', self.id, err);
-		process.exit(1);
-	});
-	*/
-
-	/*
-			worker = new Beanworker({
-				id: 'cxr_worker',
-				host: self.config.bs.host,
-				port: self.config.bs.port,
-				handlers: {
-					cxr: new CXRHandler(self.id, self.config, db)
-				},
-			});
-			worker.on('started', function () {
-				console.info('[Worker.%d] Beanworker started', self.id);
-			}).on('stopped', function () {
-				console.info('[Worker.%d] Beanworker stopped', self.id);
-			}).on('error', function (err) {
-				console.error('[Worker.%d] %s %s', self.id, err.message, err.error);
-			}).on('warning', function (err) {
-				console.warn('[Worker.%d] %s %s', self.id, err.message, err.error);
-			}).on('job.reserved', function (id) {
-				console.info('[Worker.%d] Job %s reserved', self.id, id);
-			}).on('job.handled', function (job) {
-				console.info('[Worker.%d] Job %s handled', self.id, job.id);
-			}).on('job.deleted', function (id) {
-				console.info('[Worker.%d] Job %s deleted', self.id, id);
-			}).on('job.buried', function (id) {
-				console.info('[Worker.%d] Job %s buried', self.id, id);
-			}).start([self.config.bs.tubeName]);
+		co(function* () {
+			//self.db = yield MongoClient.connect(self.config.db.uri);
+			//console.info('[Worker.%d] Connected to mongodb', self.id);
+			yield [self.bs.watchAsync([self.config.bs.tubeName]), self.bs.ignoreAsync(['default'])];
+			doNextJob.call(self);
 		}).catch(function (err) {
-			console.error('[Worker.%d] %s', self.id, err);
+			console.error('[Worker.%d] Internal error: %s', self.id, err);
+			if (self.db !== null) {
+				db.close();
+			}
 			process.exit(1);
 		});
-		*/
+	}).on('error', function (err) {
+		console.error('[Worker.%d] Failed to connect to beanstalk at %s:%d', self.id, self.config.bs.host, self.config.bs.port);
+		if (self.db !== null) {
+			db.close();
+		}
+		process.exit(1);
+	}).on('close', function () {
+		if (self.db !== null) {
+			db.close();
+		}
+	}).connect();
 };
 
+const promisifyBs = function (client) {
+	Promise.promisifyAll(client, {
+		filter: function (name) {
+			return name === 'reserve';
+		},
+		multiArgs: true
+	});
+	Promise.promisifyAll(client);
+	return client;
+};
 
-BsWorker.prototype.doNext = function () {
+const doNextJob = function () {
+	var self = this;
 	co(function* () {
 		var job;
-		job = yield self.reserve();
-		console.log(job);
-		console.info('[Worker.%d] Job %s reserved', self.id, job.id);
-
-		yield self.destroy(job.id);
+		job = yield self.bs.reserveAsync();
+		console.info('[Worker.%d] Job %s reserved', self.id, job[0]);
+		yield self.bs.destroyAsync(job[0]);
+		console.info('[Worker.%d] Job %s destroyed', self.id, job[0]);
+		//doNext.call(self);
 	}).catch(function (err) {
 		console.error('[Worker.%d] Internal error: %s', self.id, err);
+		if (self.db !== null) {
+			db.close();
+		}
 		process.exit(1);
 	});
 };
 
-BsWorker.prototype.reserve = function () {
-	var self = this;
-	return new Promise((resolve, reject) => {
-		self.bs.reserve(function (err, jobid, payload) {
-			if (err) {
-				reject(err);
-			} else {
-				console.info('[Worker.%d] Job %s reserved', self.id, jobid);
-				resolve({
-					id: jobid,
-					payload: payload.toString('ascii')
-				});
-			}
-		});
-	});
-};
+module.exports = BsWorker;
 
 
+
+/*
 
 BsWorker.prototype.reserve = function () {
 	var self = this;
@@ -185,8 +110,8 @@ BsWorker.prototype.destroy = function (jobId) {
 		});
 	});
 };
+*/
 
-module.exports = BsWorker;
 
 /*
 
