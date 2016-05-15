@@ -193,8 +193,8 @@ describe('Job', function () {
 		let reserveResult = putResult.then((jobId) => {
 			return job.reserve();
 		});
-		let ackResult = reserveResult.then((job) => {
-			return job.ack(job.Id);
+		let removeResult = reserveResult.then((job) => {
+			return job.remove(job.Id);
 		});
 		it('#put() should be a promise', function () {
 			return putResult.should.be.a('promise');
@@ -202,8 +202,8 @@ describe('Job', function () {
 		it('#reserve() should be a promise', function () {
 			return reserveResult.should.be.a('promise');
 		});
-		it('#ack() should be a promise', function () {
-			return ackResult.should.be.a('promise');
+		it('#remove() should be a promise', function () {
+			return removeResult.should.be.a('promise');
 		});
 		it('#put() result should be a string', function () {
 			return putResult.should.eventually.be.a('string');
@@ -220,8 +220,8 @@ describe('Job', function () {
 		it('#reserve() result payload should has all keys', function () {
 			return reserveResult.should.eventually.have.property('payload').have.all.keys('from', 'to', 'successCount', 'failCount');
 		});
-		it('#ack() result should have no error', function () {
-			return reserveResult.should.not.be.rejectedWith(Error);
+		it('#remove() result should have no error', function () {
+			return removeResult.should.not.be.rejectedWith(Error);
 		});
 	});
 });

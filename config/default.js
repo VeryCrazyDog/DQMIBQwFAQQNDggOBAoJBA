@@ -8,6 +8,15 @@
  */
 
 /**
+ * Options for beanstalkd server
+ * @typedef {object} BsOptions
+ *
+ * @param {string} host - The address of the beanstalkd server
+ * @param {number} port - The port of the beanstalkd server to connect to
+ * @param {string} tubeName - The tube name to use
+ */
+
+/**
  * Worker Process Options
  * @typedef {object} WorkerOptions
  *
@@ -15,10 +24,7 @@
  * @param {number} jobGaveUpCount - The total number of fail request count until gave up the job
  * @param {number} successInterval - The number of seconds to delay for the next request if the current request success
  * @param {number} failureInterval - The number of seconds to delay for the next request if the current request failed
- * @param {object} bs - Options parameters for beanstalk
- * @param {string} bs.host - The address of the beanstalkd server
- * @param {number} bs.port - The port of the beanstalkd server to connect to
- * @param {string} bs.tubeName - The tube name to use
+ * @param {BsOptions} bs - Options parameters for beanstalk
  * @param {object} db - Options parameters for MongoDB
  * @param {string} db.uri - The URI of the MongoDB server, reference: https://docs.mongodb.com/v3.0/reference/connection-string/
  */
