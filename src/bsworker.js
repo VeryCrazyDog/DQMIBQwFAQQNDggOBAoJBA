@@ -1,9 +1,5 @@
 'use strict';
 
-// Include node.js offical modules
-const http = require('http');
-const https = require('https');
-
 // Include third party modules
 const BBPromise = require('bluebird');
 const co = require('co');
@@ -13,7 +9,7 @@ const fivebeans = require('fivebeans');
 const MongoClient = require('mongodb').MongoClient;
 
 // Setup our classes
-const CXR = require('./model/cxr');
+const Cxr = require('./model/cxr');
 
 /**
  * beanstalk worker constructur
@@ -189,32 +185,10 @@ let parsePayload = function (job) {
 	return result;
 };
 
-let getContent = function (url) {
-	// return new pending promise
-	return new BBPromise((resolve, reject) => {
-		// select http or https module, depending on reqested url
-		let lib = url.startsWith('https') ? https : http;
-		let request = lib.get(url, (response) => {
-			// handle http errors
-			if (response.statusCode < 200 || response.statusCode > 299) {
-				reject(new Error('Failed to load page, status code: ' + response.statusCode));
-			}
-			// temporary data holder
-			let body = [];
-			// on every content chunk, push it to the data array
-			response.on('data', (chunk) => body.push(chunk));
-			// we are done, resolve promise with those joined chunks
-			response.on('end', () => resolve(body.join('')));
-		});
-		// handle connection errors of the request
-		request.on('error', (err) => reject(err));
-	});
-};
-
 let processJob = function (payload) {
 	let self = this;
 	return co(function* () {
-		let cxr = new CXR();
+		let cxr = new Cxr();
 		console.info('[Worker.%d] Querying %s', self.id, cxr.getQueryUrl(payload.from, payload.to));
 		let content = yield cxr.query(payload.from, payload.to);
 		console.info('[Worker.%d] Inserting data to database', self.id, content);

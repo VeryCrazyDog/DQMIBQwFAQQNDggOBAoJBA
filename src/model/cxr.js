@@ -9,7 +9,7 @@ const BBPromise = require('bluebird');
 const co = require('co');
 
 /** Currency exchange rate model */
-class CXR {
+class Cxr {
 	/**
 	 * Currency exchange rate constructor
 	 *
@@ -35,8 +35,24 @@ class CXR {
 		return this.baseUrl + '?base=' + from.toUpperCase() + '&symbols=' + to.toUpperCase();
 	}
 
+	/**
+	 * Currency exchange rate result
+	 * @typedef {object} CxrResult
+	 *
+	 * @param {string} from - The currency to exchange from
+	 * @param {string} to - The currency to exchange to
+	 * @param {Date} created_at - The number of worker to create. If the value is 0, the number of CPU core will be used.
+	 * @param {string} rate - The currency exchange rate in string which has round off to 2 decmicals
+	 */
+	/**
+	 * Get the currency exchange rate from the data source
+	 *
+	 * @param {string} from - The currency to exchange from
+	 * @param {string} to - The currency to exchange to
+	 * @returns {Promise} - A promise which resolve to the currency exchange rate result {CxrResult}
+	 */
 	query(from, to) {
-		var self = this;
+		let self = this;
 		return co(function* () {
 			from = from.toUpperCase();
 			to = to.toUpperCase();
@@ -52,7 +68,7 @@ class CXR {
 				throw new Error('Invalid response');
 			}
 			if (typeof content.rates === 'object' && to in content.rates && typeof content.rates[to] === 'number') {
-				result.rate = content.rates[to].toFixed(2).toString()
+				result.rate = content.rates[to].toFixed(2).toString();
 			} else {
 				throw new Error('Invalid response');
 			}
@@ -60,6 +76,8 @@ class CXR {
 		});
 	}
 }
+
+// Below are private functions
 
 let getContent = function (url) {
 	// return new pending promise
@@ -83,4 +101,4 @@ let getContent = function (url) {
 	});
 };
 
-module.exports = CXR;
+module.exports = Cxr;
