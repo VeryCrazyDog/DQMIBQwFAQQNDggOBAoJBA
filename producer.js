@@ -7,9 +7,9 @@ const os = require('os');
 const fivebeans = require('fivebeans');
 
 // Load configuration
-let config = require('./config/default.js');
+let config = require('./config/default');
 try {
-	require('./config/' + os.hostname().toLowerCase() + '.js')(config);
+	require('./config/' + os.hostname().toLowerCase())(config);
 } catch (e) {
 	// Intended noop to suppress error when no host-based configuration is specified
 	Function.prototype;

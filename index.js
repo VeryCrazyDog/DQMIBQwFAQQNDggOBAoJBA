@@ -5,7 +5,7 @@ const os = require('os');
 const cluster = require('cluster');
 
 // Setup our classes
-const BsWorker = require('./src/bsworker.js');
+const BsWorker = require('./src/bsworker');
 
 /**
  * Main function
@@ -13,10 +13,10 @@ const BsWorker = require('./src/bsworker.js');
 let main = function () {
 	let config;
 	// Load configuration
-	config = require('./config/default.js');
+	config = require('./config/default');
 	// Load host-based configuration
 	try {
-		require('./config/' + os.hostname().toLowerCase() + '.js')(config);
+		require('./config/' + os.hostname().toLowerCase())(config);
 	} catch (e) {
 		// Intended noop to suppress error when no host-based configuration is specified
 		Function.prototype;
