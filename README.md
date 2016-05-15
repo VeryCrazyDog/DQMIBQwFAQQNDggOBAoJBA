@@ -15,6 +15,12 @@ This is a private project.
 node index.js
 ```
 
+## Testing
+
+```
+npm test
+```
+
 ## Tested Environment
 
 * Windows 7 Ultimate 64-bit

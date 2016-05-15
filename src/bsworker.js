@@ -1,9 +1,7 @@
 'use strict';
 
 // Include third party modules
-const BBPromise = require('bluebird');
 const co = require('co');
-const fivebeans = require('fivebeans');
 
 // Setup third party classes
 const MongoClient = require('mongodb').MongoClient;

@@ -22,7 +22,7 @@ class Job {
 	 * Connection result to beanstalkd server
 	 * @typedef {Array} BsConnResult
 	 *
-	 * @param {string[]} BsConnResult[0] - A string array which contains the list of tube which are watching 
+	 * @param {string[]} BsConnResult[0] - A string array which contains the list of tube which are watching
 	 * @param {string} BsConnResult[1] - The tube name which produced job goes to
 	 */
 	/**
@@ -53,7 +53,7 @@ class Job {
 	/**
 	 * Job Details
 	 * @typedef {object} JobDetails
-	 * 
+	 *
 	 * @returns {string} id - The ID of the job
 	 * @returns {object} payload - The payload of the job
 	 * @returns {string} payload.from - The currency to exchange from
@@ -80,7 +80,7 @@ class Job {
 	/**
 	 * Remove/destroy a job from the underlying beanstalkd server
 	 *
-	 * @param {string} jobId - The job ID of the job to be removed 
+	 * @param {string} jobId - The job ID of the job to be removed
 	 * @returns {Promise} - A promise
 	 */
 	remove(jobId) {

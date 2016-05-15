@@ -17,7 +17,7 @@ global.should = chai.should();
 global.assert = chai.assert;
 
 // Begin test
-describe.skip('Cxr', function () {
+describe('Cxr', function () {
 	describe('#getQueryUrl() with valid input', function () {
 		let cxr = new Cxr();
 		let from = 'hkd';
@@ -180,7 +180,10 @@ describe('Job', function () {
 		}
 		// Run test
 		let job = new Job(config.worker.bs);
-		let payload = { from: 'USD', to: 'HKD' };
+		let payload = {
+			from: 'USD',
+			to: 'HKD'
+		};
 		let connectResult = job.initConnection();
 		// Put 3 jobs, as beanstalkd sometimes unable to reserve some new put job
 		let putResult = connectResult.then(() => {
@@ -193,8 +196,8 @@ describe('Job', function () {
 		let reserveResult = putResult.then((jobId) => {
 			return job.reserve();
 		});
-		let removeResult = reserveResult.then((job) => {
-			return job.remove(job.Id);
+		let removeResult = reserveResult.then((jobInfo) => {
+			return job.remove(jobInfo.id);
 		});
 		it('#put() should be a promise', function () {
 			return putResult.should.be.a('promise');

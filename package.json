@@ -1,7 +1,7 @@
 {
-  "name": "bs",
+  "name": "private",
   "version": "1.0.0",
-  "description": "",
+  "description": "Private project",
   "main": "index.js",
   "scripts": {
     "lint": "eslint .",
