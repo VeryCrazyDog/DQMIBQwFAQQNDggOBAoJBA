@@ -16,17 +16,7 @@ const MongoClient = require('mongodb').MongoClient;
  * beanstalk worker constructur
  *
  * @param {number} id - Worker ID
- * @param {object} options - Options parameters
- * @param {number} options.jobDoneCount - The total number of successful request count until the job is marked as done
- * @param {number} options.jobGaveUpCount - The total number of fail request count until gave up the job
- * @param {number} options.successInterval - The number of seconds to delay for the next request if the current request success
- * @param {number} options.failureInterval - The number of seconds to delay for the next request if the current request failed
- * @param {object} options.bs - Options parameters for beanstalk
- * @param {string} options.bs.host - The address of the beanstalkd server
- * @param {number} options.bs.port - The port of the beanstalkd server to connect to
- * @param {string} options.bs.tubeName - The tube name to use
- * @param {object} options.db - Options parameters for MongoDB
- * @param {string} options.db.uri - The URI of the MongoDB server
+ * @param {WorkerOptions} options - Options parameters
  * @constructor
  */
 let BsWorker = function (id, options) {
@@ -53,15 +43,19 @@ BsWorker.prototype.start = function () {
 		}), co(function* () {
 			yield self.bs.connectAsync();
 			console.info('[Worker.%d] Connected to beanstalk at %s:%d', self.id, self.config.bs.host, self.config.bs.port);
+			let bsInit = self.bs.watchAsync([self.config.bs.tubeName]);
+			if (self.config.bs.tubeName !== 'default') {
+				bsInit.then(() => {
+					return self.bs.ignoreAsync(['default']);
+				});
+			}
+			bsInit.then(() => {
+				return self.bs.list_tubes_watchedAsync();
+			}).then((tubelist) => {
+				console.info('[Worker.%d] Watching beanstalk tube for consume job: %s', self.id, tubelist.join(', '));
+			});
 			yield [
-				BBPromise.all([
-					self.bs.watchAsync([self.config.bs.tubeName]),
-					self.bs.ignoreAsync(['default'])
-				]).then(() => {
-					return self.bs.list_tubes_watchedAsync();
-				}).then((tubelist) => {
-					console.info('[Worker.%d] Watching beanstalk tube for consume job: %s', self.id, tubelist.join(', '));
-				}),
+				bsInit,
 				self.bs.useAsync(self.config.bs.tubeName).then((tubeName) => {
 					console.info('[Worker.%d] Using beanstalk tube for produce job: %s', self.id, tubeName);
 				})
@@ -186,6 +180,7 @@ let parsePayload = function (job) {
 			throw new Error("Invalid field 'failCount'");
 		}
 	} catch (err) {
+		result = null;
 		console.warn('[Worker.%d] Invalid payload for job %s: %s', this.id, job[0], err);
 	}
 	return result;

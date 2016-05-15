@@ -7,9 +7,6 @@ const cluster = require('cluster');
 // Setup our classes
 const BsWorker = require('./src/bsworker.js');
 
-// Setup constants
-const CPU_COUNT = os.cpus().length;
-
 /**
  * Main function
  */
@@ -25,12 +22,13 @@ let main = function () {
 		Function.prototype;
 	}
 	if (cluster.isMaster) {
-		let workerCount;
 		console.info('[Master] Master process created');
+		config = config.master;
+		let workerCount;
 		if (config.workerCount > 0) {
 			workerCount = config.workerCount;
 		} else {
-			workerCount = CPU_COUNT;
+			workerCount = os.cpus().length;
 		}
 		for (let i = 0; i < workerCount; i++) {
 			cluster.fork();
@@ -43,8 +41,9 @@ let main = function () {
 			}, 5000);
 		});
 	} else {
-		let worker;
 		console.info('[Worker.%d] Cluster worker created', cluster.worker.id);
+		config = config.worker;
+		let worker;
 		worker = new BsWorker(cluster.worker.id, config);
 		worker.start();
 	}

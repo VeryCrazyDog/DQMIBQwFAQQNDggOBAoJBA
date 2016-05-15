@@ -14,6 +14,7 @@ try {
 	// Intended noop to suppress error when no host-based configuration is specified
 	Function.prototype;
 }
+config = config.worker;
 config.bs.totalCount = 1;
 
 // Main
