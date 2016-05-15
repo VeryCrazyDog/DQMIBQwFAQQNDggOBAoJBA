@@ -12,6 +12,9 @@ const fivebeans = require('fivebeans');
 // Setup third party classes
 const MongoClient = require('mongodb').MongoClient;
 
+// Setup our classes
+const CXR = require('./model/cxr');
+
 /**
  * beanstalk worker constructur
  *
@@ -211,16 +214,9 @@ let getContent = function (url) {
 let processJob = function (payload) {
 	let self = this;
 	return co(function* () {
-		let url = 'http://api.fixer.io/latest?base=' + payload.from + '&symbols=' + payload.to;
-		console.info('[Worker.%d] Querying %s', self.id, url);
-		let content = yield getContent(url).then(JSON.parse);
-		// TODO Validate the returned data
-		content = {
-			from: content.base,
-			to: payload.to,
-			created_at: new Date(),
-			rate: content.rates[payload.to].toFixed(2).toString()
-		};
+		let cxr = new CXR();
+		console.info('[Worker.%d] Querying %s', self.id, cxr.getQueryUrl(payload.from, payload.to));
+		let content = yield cxr.query(payload.from, payload.to);
 		console.info('[Worker.%d] Inserting data to database', self.id, content);
 		yield self.db.collection('xr').insertOne(content);
 	});
