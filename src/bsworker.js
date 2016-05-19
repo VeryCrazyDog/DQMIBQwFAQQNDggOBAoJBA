@@ -58,6 +58,7 @@ let doNextJob = function () {
 			job = yield self.bs.reserve();
 			console.info('[Worker.%d] Job %s reserved with payload', self.id, job.id, JSON.stringify(job.payload));
 		} catch (e) {
+			// FIXME job is null
 			buryJob.call(self, job.id);
 			job = null;
 		}
@@ -97,9 +98,8 @@ let doNextJob = function () {
 					buryJob.call(self, job.id);
 				}
 			}
-		} else {
-			buryJob.call(self, job.id);
 		}
+		// FIXME Do not use recursive call, which cause stack overflow
 		return doNextJob.call(self);
 	});
 };
